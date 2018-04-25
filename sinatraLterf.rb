@@ -1,19 +1,100 @@
 require 'webrick'
-#require 'sinatra/base'
-require 'sinatra'
+require 'sinatra/base'
+require 'yaml'
+require "rexml/document"
 class LteService  < Sinatra::Application
+	def buildXMLReply(replyName, result, msg, &block)
+    root = REXML::Element.new("#{replyName}")
+    if result == :Error
+      addXMLElement(root, "ERROR", "Error when accessing the Inventory Database")
+    elsif result == nil || result.empty?
+      addXMLElement(root, "ERROR", "#{msg}")
+    else
+      yield(root, result)
+    end
+    root
+  end
+
+  #
+  # Create new XML element and add it to an existing XML tree
+  #
+  # - parent = the existing XML tree to add the new element to
+  # - name = the name for the new XML element to add
+  # - value =  the value for the new XML element to add
+  #
+  def self.addXMLElement(parent, name, value)
+    el = parent.add_element(name)
+    el.add_text(value)
+  end
+
+  def self.addXMLElementFromFile(parent, xml_doc)
+    parent.add_element(xml_doc)
+  end
+
+  def self.addXMLElementFromArray(parent,name,value)
+    value.each { |val|
+      if val.is_a?(Hash)
+          el = parent.add_element(name)
+          addXMLElementsFromHash(el,val, false)
+      else
+          if val.is_a?(Array)
+            addXMLElementFromArray(parent,name,val)
+          else
+            el = parent.add_element(name)
+            el.add_text(val)
+          end
+      end
+    }
+  end
+
+  def self.addXMLElementsFromHash(parent, elems, isatt=true)
+    m_isatt = isatt
+    elems.each_pair { |key,val|
+      if val.is_a?(Hash)
+        m_isatt=false
+      else
+        m_isatt=isatt
+      end
+      if (m_isatt)
+        parent.add_attribute(key,val)
+      else
+        if val.is_a?(Hash)
+          el = parent.add_element(key)
+          addXMLElementsFromHash(el,val, false)
+        else
+          if val.is_a?(Array)
+            addXMLElementFromArray(parent,key,val)
+          else
+            el = parent.add_element(key)
+            el.add_text(val)
+          end
+        end
+      end
+    }
+  end
 	@@list_methods=Array.new
 
 		
 	get '/bs/get' do 
 		query = params['node']
+		thing = YAML.load_file('omf-aggmgr.yaml')
+		puts thing[:xmpp].inspect
 		kati="You have to include the AP ID number in the query."
 		unless query
 			kati
 		else
 			params.delete('node')
 			unless params.empty?
-				"HTML5/XML response to be built..."
+				msgEmpty = "Den egine kati"
+				replyXML = self.buildXMLReply("Lterf", msgEmpty, msgEmpty) { |root, dummy|
+          			nodeEl = root.add_element "node#{query}"
+          			
+
+          		}
+          		content_type "xml"
+          		replyXML.to_s
+        
+				#{}"HTML5/XML response to be built..."
 			else
 				WEBrick::HTTPStatus::BadRequest = "Missing parameter"
 				
