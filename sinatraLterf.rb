@@ -2,7 +2,20 @@ require 'webrick'
 require 'sinatra/base'
 require 'yaml'
 require "rexml/document"
+require  './oabis'
 class LteService  < Sinatra::Application
+
+	@@valHash = {'ip'=>'node060',
+		'type' => 'default',
+		'key'  => 'key',
+		'version' => '0.1',
+		'sshusers' => 'root',
+		'sshpass' => 'passwd',
+		'oaipwd'  => 'passwd',
+		'default' => 'default'
+	}
+	@@oabis=OaiBs.new(@@valHash)
+
 	def buildXMLReply(replyName, result, msg, &block)
     root = REXML::Element.new("#{replyName}")
     if result == :Error
@@ -22,16 +35,16 @@ class LteService  < Sinatra::Application
   # - name = the name for the new XML element to add
   # - value =  the value for the new XML element to add
   #
-  def self.addXMLElement(parent, name, value)
+  def addXMLElement(parent, name, value)
     el = parent.add_element(name)
     el.add_text(value)
   end
 
-  def self.addXMLElementFromFile(parent, xml_doc)
+  def addXMLElementFromFile(parent, xml_doc)
     parent.add_element(xml_doc)
   end
 
-  def self.addXMLElementFromArray(parent,name,value)
+  def addXMLElementFromArray(parent,name,value)
     value.each { |val|
       if val.is_a?(Hash)
           el = parent.add_element(name)
@@ -47,7 +60,7 @@ class LteService  < Sinatra::Application
     }
   end
 
-  def self.addXMLElementsFromHash(parent, elems, isatt=true)
+  def addXMLElementsFromHash(parent, elems, isatt=true)
     m_isatt = isatt
     elems.each_pair { |key,val|
       if val.is_a?(Hash)
@@ -87,10 +100,18 @@ class LteService  < Sinatra::Application
 			unless params.empty?
 				msgEmpty = "Den egine kati"
 				replyXML = self.buildXMLReply("Lterf", msgEmpty, msgEmpty) { |root, dummy|
-          			nodeEl = root.add_element "node#{query}"
+					bs = root.add_element "BS"
+          			nodeEl = bs.add_element "node#{query}"
+          			params.each { |key,value|
+            			puts key, value 
+	    				element = @@oabis.get(key)
+	    				puts element
+          				nodeEl.add_element element
+          			}
           			
 
           		}
+          		puts replyXML
           		content_type "xml"
           		replyXML.to_s
         
@@ -110,7 +131,15 @@ class LteService  < Sinatra::Application
 		else
 			params.delete('node')
 			unless params.empty?
-				"HTML5/XML response to be built..."
+				msgEmpty = "Den egine kati"
+				replyXML = self.buildXMLReply("Lterf", msgEmpty, msgEmpty) { |root, dummy|
+					bs = root.add_element "BS"
+          			nodeEl = bs.add_element "node#{query}"
+          			
+
+          		}
+          		content_type "xml"
+          		replyXML.to_s
 			else
 				WEBrick::HTTPStatus::BadRequest = "Missing parameter"
 				
