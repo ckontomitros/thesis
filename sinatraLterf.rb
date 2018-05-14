@@ -2,8 +2,101 @@ require 'webrick'
 require 'sinatra/base'
 require 'yaml'
 require "rexml/document"
-require  './oabis'
+require  './oaibs'
 class LteService  < Sinatra::Application
+	def initialise()
+		puts "mpika"
+		thing = YAML.load_file('lterf.yaml')
+    @config = thing['lterf']
+    @bsversion = Array.new
+    puts thing['lterf']['bs']
+    if @config['bs']['type'].kind_of?(Array)
+      @bstype = @config['bs']['type']
+      @bstype_no = @config['bs']['type'].length
+      @bsversion = @config['bs']['version']
+       
+      (0..(@bstype_no-1)).each do |i|
+       # debug(serviceName, "Loading #{(@bstype[i].to_s.downcase).capitalize} base station module")
+        require "./#{@bstype[i].to_s.downcase}bs"
+      end
+    else
+      @bstype = @config['bs']['type'].to_s.downcase
+      @bsversion = @config['bs']['version'].to_s.downcase
+      @bstype_no = 1
+
+     # debug(serviceName, "Loading #{@bstype.capitalize} base station module")
+      require "./#{@bstype}bs" 
+    end
+    p @bstype
+    p @bsversion
+    #puts "bstypess is : #{@bstype} \n\n"
+    #@bstype = @config['bs']['type'].to_s.downcase
+    raise("'type' cannot be empty in 'bs' section in lterf.yaml") if @bstype.empty?
+
+    # load database
+#    dbFile = "#{LTERF_DIR}/#{@config['database']['dbFile']}"
+    #debug(serviceName, "Loading database file #{dbFile}")
+ #   DataMapper.setup(:default, "sqlite://#{dbFile}")
+  #  DataMapper.auto_upgrade!
+    
+    #(0..(@bstype_no-1)).each do |i|
+    #  debug(serviceName, "Loading #{(@bstype[i].to_s.downcase).capitalize} base station module")
+    #  require "omf-aggmgr/ogs_lterf/#{@bstype[i].to_s.downcase}bs"
+    #end
+    @bs = []
+    #@epc = []
+
+    #puts "type is :#{@config['bs']['type'][1]}"  
+
+    if @config['bs']['ip'].kind_of?(Array)
+      @bs_no = @config['bs']['ip'].length
+    else
+      @bs_no = 1
+    end
+
+   # puts "#{@bstype[0].to_s.downcase}\n\n"
+   # str = @bstype[0].to_s.dowcase
+   # puts "#{str.Kind_of}\n\n"
+    @num = -1
+    (0..(@bstype_no-1)).each do | i | #for each type of BS
+
+      if @bstype_no > 1 #2 or more types of BS and 2 or more BSs
+ 
+          #alternate_config = configure_file(@config['bs'], i, -1)
+          @bs.push(Kernel.const_get("#{(@bstype[i].to_s.downcase)}Bs").new(@mobs, alternate_config))
+          @num = @num + 1  
+
+      elsif @bs_no > 1 # 1 type of BS and 1 or more numbers of BSs
+
+         (0..(@bs_no-1)).each do | j | #for each BS      
+           #alternate_config = configure_file(@config['bs'], -1, j)
+           @bs.push(Kernel.const_get("#{@bstype.capitalize}Bs").new(@mobs, alternate_config))
+           @num = @num + 1
+         end
+
+      else
+         #alternate_config = configure_file(@config['bs'], -1, -1)
+         @bs.push(Kernel.const_get("#{@bstype.capitalize}Bs").new(@mobs, alternate_config))
+         @num = @num + 1
+      end  
+        
+    end
+=begin
+    initMethods
+
+    @epcconfig = @config['epc']
+    @epctype = @epcconfig['type']
+
+    require "omf-aggmgr/ogs_lterf/#{@epctype}epc"
+
+    @epc = Kernel.const_get("#{@epctype.capitalize}Epc").new(@mobs, @epcconfig)
+    initEpcMethods
+    createDataPath(@config['datapath'])
+    @ltecontent = ApnContent.new();   
+
+    initDatapathMethods
+=end
+  end
 
 	@@valHash = {'ip'=>'node060',
 		'type' => 'default',
@@ -15,6 +108,8 @@ class LteService  < Sinatra::Application
 		'default' => 'default'
 	}
 	@@oabis=OaiBs.new(@@valHash)
+
+
 
 	def buildXMLReply(replyName, result, msg, &block)
     root = REXML::Element.new("#{replyName}")
@@ -89,11 +184,11 @@ class LteService  < Sinatra::Application
 
 		
 	get '/bs/get' do 
-		query = params['node']
+		node_index = params['node']
 		thing = YAML.load_file('omf-aggmgr.yaml')
 		puts thing[:xmpp].inspect
 		kati="You have to include the AP ID number in the query."
-		unless query
+		unless node_index
 			kati
 		else
 			params.delete('node')
@@ -101,12 +196,14 @@ class LteService  < Sinatra::Application
 				msgEmpty = "Den egine kati"
 				replyXML = self.buildXMLReply("Lterf", msgEmpty, msgEmpty) { |root, dummy|
 					bs = root.add_element "BS"
-          			nodeEl = bs.add_element "node#{query}"
+          			nodeEl = bs.add_element "bs"
           			params.each { |key,value|
             			puts key, value 
-	    				element = @@oabis.get(key)
+	    				#@bs[node_index.to_i-1].get(key)
+	    				element=@@oabis.get(key)
 	    				puts element
-          				nodeEl.add_element element
+	    				self.addXMLElementsFromHash(nodeEl,element)
+          				
           			}
           			
 
@@ -135,7 +232,10 @@ class LteService  < Sinatra::Application
 				replyXML = self.buildXMLReply("Lterf", msgEmpty, msgEmpty) { |root, dummy|
 					bs = root.add_element "BS"
           			nodeEl = bs.add_element "node#{query}"
-          			
+          			params.each { |key,value|
+          				 v = @@oabis.set(key, value)
+	    				addXMLElementsFromHash(nodeEl,v) 
+          }
 
           		}
           		content_type "xml"
