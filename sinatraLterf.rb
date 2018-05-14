@@ -4,7 +4,16 @@ require 'yaml'
 require "rexml/document"
 require  './oaibs'
 class LteService  < Sinatra::Application
-	def initialise()
+	@@valHash = {'ip'=>'node060',
+		'type' => 'default',
+		'key'  => 'key',
+		'version' => '0.1',
+		'sshusers' => 'root',
+		'sshpass' => 'passwd',
+		'oaipwd'  => 'passwd',
+		'default' => 'default'
+	}
+	def initialize()
 		puts "mpika"
 		thing = YAML.load_file('lterf.yaml')
     @config = thing['lterf']
@@ -63,23 +72,26 @@ class LteService  < Sinatra::Application
       if @bstype_no > 1 #2 or more types of BS and 2 or more BSs
  
           #alternate_config = configure_file(@config['bs'], i, -1)
-          @bs.push(Kernel.const_get("#{(@bstype[i].to_s.downcase)}Bs").new(@mobs, alternate_config))
+          #@bs.push(Kernel.const_get("#{(@bstype[i].to_s.downcase)}Bs").new(@mobs, alternate_config))
+          @bs.push(Kernel.const_get("#{(@bstype[i].to_s.downcase)}Bs").new(@@valHash))
           @num = @num + 1  
 
       elsif @bs_no > 1 # 1 type of BS and 1 or more numbers of BSs
 
-         (0..(@bs_no-1)).each do | j | #for each BS      
+           (0..(@bs_no-1)).each do | j | #for each BS      
            #alternate_config = configure_file(@config['bs'], -1, j)
-           @bs.push(Kernel.const_get("#{@bstype.capitalize}Bs").new(@mobs, alternate_config))
+           #@bs.push(Kernel.const_get("#{@bstype[i]}Bs").new(@mobs, alternate_config))
+           @bs.push(Kernel.const_get("#{@bstype[i]}Bs").new(@@valHash))
            @num = @num + 1
          end
 
       else
          #alternate_config = configure_file(@config['bs'], -1, -1)
-         @bs.push(Kernel.const_get("#{@bstype.capitalize}Bs").new(@mobs, alternate_config))
+         #@bs.push(Kernel.const_get("#{@bstype[i]}Bs").new(@mobs, alternate_config))
+         @bs.push(Kernel.const_get("#{@bstype[i]}Bs").new(@@valHash))
          @num = @num + 1
       end  
-        
+     super   
     end
 =begin
     initMethods
@@ -98,15 +110,7 @@ class LteService  < Sinatra::Application
 =end
   end
 
-	@@valHash = {'ip'=>'node060',
-		'type' => 'default',
-		'key'  => 'key',
-		'version' => '0.1',
-		'sshusers' => 'root',
-		'sshpass' => 'passwd',
-		'oaipwd'  => 'passwd',
-		'default' => 'default'
-	}
+	
 	@@oabis=OaiBs.new(@@valHash)
 
 
@@ -199,8 +203,8 @@ class LteService  < Sinatra::Application
           			nodeEl = bs.add_element "bs"
           			params.each { |key,value|
             			puts key, value 
-	    				#@bs[node_index.to_i-1].get(key)
-	    				element=@@oabis.get(key)
+	    				element=@bs[node_index.to_i-1].get(key)
+	    				#element=@@oabis.get(key)
 	    				puts element
 	    				self.addXMLElementsFromHash(nodeEl,element)
           				
